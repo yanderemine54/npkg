@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <locale.h>
+#include <unistd.h>
 
 #include <archive.h>
 #include <curl/curl.h>
@@ -84,11 +85,11 @@ config_set:
     curl_easy_setopt(handle, CURLOPT_USE_SSL, CURLUSESSL_ALL);
     curl_easy_perform(handle);
     fclose(package_list.stream);
-    /* TODO: Parse the package list to figure out whether the package is available in the repo (and to figure out the version) */
     const char* packageToInstall = argv[1];
 
+    char* packageName = findPackageInRepository(packageToInstall);
     puts("Downloading packages...");
-    download_package(handle, findPackageInRepository(packageToInstall), repository);
+    download_package(handle, packageName, repository);
     curl_easy_cleanup(handle);
     curl_global_cleanup();
 
@@ -109,6 +110,19 @@ config_set:
     if (verify_package(context, signatureFilename, packageFilename) == VERIFY_OK) {
         puts("Extracting packages...");
         extract_package(packageFilename);
+        char* packagePath = calloc(512, sizeof(char));
+        strncat(packagePath, "./", 3);
+        strncat(packagePath, packageName, 509);
+        chdir(packagePath);
+        system("./configure");
+        printf("Source configured.\n");
+        system("make");
+        printf("Source compiled.\n");
+        if (geteuid() == 0) {
+            system("make install");
+            printf("Package installed.\n");
+        }
+        free(packagePath);
     } else {
         fprintf(stderr, "ERROR: package %s corrupt or tampered with!\n", packageFilename);
     }
