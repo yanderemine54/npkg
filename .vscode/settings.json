@@ -1,0 +1,6 @@
+{
+    "licenser.projectName": "npkg",
+    "files.associations": {
+        "toml.h": "c"
+    }
+}
