@@ -44,8 +44,12 @@ int main(int argc, const char* argv[]) {
         NULL
     };
     FILE* configFile = fopen("/etc/npkg.conf", "r");
-    char* tomlErrorBuffer = calloc(512, sizeof(char));
     char* repository = calloc(497, sizeof(char));
+    if (!configFile) {
+        repository = "ftp://anonymous@ftp.maddysworld.de/packages";
+        goto config_set;
+    }
+    char* tomlErrorBuffer = calloc(512, sizeof(char));
     toml_table_t* config = toml_parse_file(configFile, tomlErrorBuffer, 512);
     fclose(configFile);
     if (!config) {
@@ -130,7 +134,6 @@ config_set:
     free(signatureFilename);
     gpgme_release(context);
 
-    free(repository);
     toml_free(config);
     return EXIT_SUCCESS;
 }

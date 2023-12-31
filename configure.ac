@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with npkg.  If not, see <http://www.gnu.org/licenses/>.
 
-AC_INIT([npkg], [0.1.0])
+AC_INIT([npkg], [0.1.1])
 AC_PREREQ([2.69])
 AM_INIT_AUTOMAKE([foreign])
 
