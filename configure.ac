@@ -15,9 +15,12 @@
 # You should have received a copy of the GNU General Public License
 # along with npkg.  If not, see <http://www.gnu.org/licenses/>.
 
-AC_INIT([npkg], [0.1.1])
+AC_INIT([npkg], [0.2.0], [maddy@maddysworld.de], [npkg-0.2.0], [https://github.com/yanderemine54/npkg])
 AC_PREREQ([2.69])
 AM_INIT_AUTOMAKE([foreign])
+AC_USE_SYSTEM_EXTENSIONS
+gl_INIT
+AC_CONFIG_MACRO_DIRS([m4])
 
 LIBCURL_CHECK_CONFIG([yes], [8.0.0])
 AC_SEARCH_LIBS([curl_global_init], [curl])
@@ -32,6 +35,8 @@ AC_SEARCH_LIBS([toml_parse_file], [toml])
 AC_SYS_LARGEFILE
 
 AC_PROG_CC
+gl_EARLY
 
-AC_CONFIG_FILES([Makefile src/Makefile])
+AC_CONFIG_HEADERS([config.h])
+AC_CONFIG_FILES([Makefile src/Makefile lib/Makefile])
 AC_OUTPUT

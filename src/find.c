@@ -37,6 +37,9 @@ char* findPackageInRepository(const char* name) {
             strncat(packageString, name, MIN(strlen(name), 512));
             strncat(packageString, "-", 2);
             token = strtok(NULL, " ");
+            if (token == NULL) {
+                return NULL;
+            }
             strncat(packageString, token, MIN(256 - strlen(name), strlen(token) - 1));
             break;
         }
