@@ -10,9 +10,7 @@ It requires `libcurl >= 8.0.0`, `GPGME >= 1.8.0`, `libzstd >= 1.0.0` and `tomlc9
 
 ## Building
 
-Download the release tarball, extract it change directory into it and run:
-```
-./configure
-make
-make install
+Download the release tarball, extract it, change directory into it and run:
+```sh
+./npkg-install.sh
 ```

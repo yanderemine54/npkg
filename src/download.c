@@ -20,10 +20,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #include <curl/curl.h>
 
 #include "download.h"
+#include "config.h"
 
 size_t writefunction(void* buffer, size_t size, size_t nmemb, void* stream) {
     struct FtpFile* out = (struct FtpFile* )stream;
@@ -37,13 +39,18 @@ size_t writefunction(void* buffer, size_t size, size_t nmemb, void* stream) {
 }
 
 int download_package(CURL* handle, const char* package, const char* repository) {
+    struct stat source_temp_dir_stat;
     char* url = (char*)calloc(1024, sizeof(char));
     char* packageFilename = (char*)calloc(512, sizeof(char));
+    strcat(packageFilename, "/tmp/npkg/src/");
     strncat(packageFilename, package, 503);
     strncat(packageFilename, ".tar.zst", 9);
     char* packageSignatureFilename = (char*)calloc(512, sizeof(char));
-    strncat(packageSignatureFilename, packageFilename, 507);
+    strncpy(packageSignatureFilename, packageFilename, 507);
     strncat(packageSignatureFilename, ".sig", 5);
+    char* remotePackageFilename = (char*)calloc(512, sizeof(char));
+    strncat(remotePackageFilename, package, 503);
+    strncat(remotePackageFilename, ".tar.zst", 9);
     struct FtpFile packageArchive = {
         packageFilename,
         NULL
@@ -52,33 +59,51 @@ int download_package(CURL* handle, const char* package, const char* repository) 
         packageSignatureFilename,
         NULL
     };
+#ifdef DEBUG
     puts(packageFilename);
     puts(packageSignatureFilename);
+#endif
+    /* Create the temporary source directory if it doesn't exist. */
+    if (stat("/tmp/npkg/src", &source_temp_dir_stat) == -1) {
+        mkdir("/tmp/npkg", 0755);
+        mkdir("/tmp/npkg/src", 0755);
+    }
+
     /* Build final URL */
     strncat(url, repository, 506);
     strncat(url, "/", 2);
-    strncat(url, packageFilename, 512);
+    strncat(url, remotePackageFilename, 512);
+#ifdef DEBUG
     puts(url);
+#endif
     /* Download package */
     curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, writefunction);
     curl_easy_setopt(handle, CURLOPT_WRITEDATA, &packageArchive);
     curl_easy_setopt(handle, CURLOPT_URL, url);
     curl_easy_setopt(handle, CURLOPT_USE_SSL, CURLUSESSL_ALL);
     CURLcode error = curl_easy_perform(handle);
+#ifdef DEBUG
     printf("%s\n", curl_easy_strerror(error));
+#endif
     /* Build url of signature */
     strncat(url, ".sig", 5);
+#ifdef DEBUG
     puts(url);
+#endif
     /* Download the package's signature */
     curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, writefunction);
     curl_easy_setopt(handle, CURLOPT_WRITEDATA, &packageSignature);
     curl_easy_setopt(handle, CURLOPT_URL, url);
     curl_easy_setopt(handle, CURLOPT_USE_SSL, CURLUSESSL_ALL);
     error = curl_easy_perform(handle);
+#ifdef DEBUG
     printf("%s\n", curl_easy_strerror(error));
+#endif
     fclose(packageArchive.stream);
     fclose(packageSignature.stream);
     free(url);
     free(packageFilename);
     free(packageSignatureFilename);
+    free(remotePackageFilename);
+    return 0;
 }

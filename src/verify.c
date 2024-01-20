@@ -22,6 +22,7 @@
 #include <gpgme.h>
 
 #include "verify.h"
+#include "config.h"
 
 int verify_package(gpgme_ctx_t context, const char* signatureFilename, const char* packageFilename) {
     FILE* signatureFile;
@@ -35,8 +36,9 @@ int verify_package(gpgme_ctx_t context, const char* signatureFilename, const cha
     signatureFile = fopen(signatureFilename, "rb");
     packageFile = fopen(packageFilename, "rb");
 
+#ifdef DEBUG
     puts("Streams created...");
-
+#endif
     error = gpgme_data_new_from_stream(&signature, signatureFile);
     if (error != GPG_ERR_NO_ERROR) {
         puts("signature error");
@@ -48,7 +50,9 @@ int verify_package(gpgme_ctx_t context, const char* signatureFilename, const cha
         gpg_strerror(error);
     }
 
+#ifdef DEBUG
     puts("Data buffers created");
+#endif
 
     gpgme_data_rewind(signature);
 
@@ -59,34 +63,40 @@ int verify_package(gpgme_ctx_t context, const char* signatureFilename, const cha
     if (error != GPG_ERR_NO_ERROR) {
         gpg_strerror(error);
     }
+
+#ifdef DEBUG
     puts("verified without result");
+#endif
 
     gpgme_data_rewind(signature);
 
     result = gpgme_op_verify_result(context);
 
+#ifdef DEBUG
     puts("Verified package");
+#endif
 
     if (!result) {
         puts("result is a NULL pointer! The operation failed for some reason and it didn't tell us why");
         goto bad_signature_cleanup;
     }
     signatureLinkedList = result->signatures;
-    do {
-        if ((signatureLinkedList->summary & GPGME_SIGSUM_VALID)) {
-            puts("Good singature cleanup");
-            gpgme_data_release(signature);
-            gpgme_data_release(package);
-            fclose(signatureFile);
-            fclose(packageFile);
-            return VERIFY_OK;
-        } else {
-            puts("Next signature");
-            signatureLinkedList = signatureLinkedList->next;
-        }
-    } while (signatureLinkedList->next != NULL);
+
+    if ((signatureLinkedList->summary & GPGME_SIGSUM_VALID)) {
+#ifdef DEBUG
+        puts("Good singature cleanup");
+#endif
+        gpgme_data_release(signature);
+        gpgme_data_release(package);
+        fclose(signatureFile);
+        fclose(packageFile);
+        return VERIFY_OK;
+    }
+    
 bad_signature_cleanup:
+#ifdef DEBUG
     puts("Bad signature cleanup");
+#endif
     gpgme_data_release(signature);
     gpgme_data_release(package);
     fclose(signatureFile);

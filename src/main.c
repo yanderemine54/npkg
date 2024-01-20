@@ -22,6 +22,9 @@
 #include <string.h>
 #include <locale.h>
 #include <unistd.h>
+#include <sys/stat.h>
+#include <errno.h>
+#include <dirent.h>
 
 #include <archive.h>
 #include "argp.h" /* In source tree for portability reasons. */
@@ -33,6 +36,7 @@
 #include "download.h"
 #include "verify.h"
 #include "find.h"
+#include "colors.h"
 
 /* Argp boilerplate. */
 const char* argp_program_version = "npkg 0.2.0";
@@ -91,6 +95,8 @@ static struct argp parser = {
     0
 };
 
+void recursivelyRemoveFileTree(const char* path);
+
 int main(int argc, const char* argv[]) {
     CURL* handle;
     struct FtpFile package_list = {
@@ -140,8 +146,9 @@ config_set:
     char* url = (char*)calloc(512, sizeof(char));
     strncat(url, repository, 497);
 
-    if (arguments.mode == INSTALL_MODE || arguments.mode == SEARCH_MODE) {
-        /* Dowload package list & packages */
+    if (arguments.mode == INSTALL_MODE || arguments.mode == SEARCH_MODE || arguments.mode == UPDATE_MODE) {
+        int error = 0;
+        /* Download package list. */
         curl_global_init(CURL_GLOBAL_ALL);
         handle = curl_easy_init();
         curl_easy_setopt(handle, CURLOPT_URL, strncat(url, "/packages.list", 15));
@@ -151,9 +158,31 @@ config_set:
         curl_easy_perform(handle);
         fclose(package_list.stream);
         char* packageName = findPackageInRepository(arguments.package);
+        unlink("packages.list");
 
-        if (arguments.mode == INSTALL_MODE) {
-            /* We're installing a package. */
+        if (arguments.mode == INSTALL_MODE || arguments.mode == UPDATE_MODE) {
+            /* We're installing or updating a package. */
+            struct stat directory;
+            char* package_path = calloc(256, sizeof(char));
+            strcat(package_path, "/usr/local/");
+            strncat(package_path, packageName, 255-strlen( "/usr/local/"));
+            if (arguments.mode == UPDATE_MODE && stat(package_path, &directory) == 0 && S_ISDIR(directory.st_mode)) {
+                /* We're already on the latest version. */
+                printf("%s is already the latest version available via the repository, no update required :)\n", arguments.package);
+                free(package_path);
+                goto cleanup;
+            }
+            free(package_path);
+            if (arguments.mode == UPDATE_MODE) {
+                /* TODO: Keep track of installed files in install script and 
+                   delete those instead of semi-hardcoding the path. */
+                char* binaryPath = calloc(256, sizeof(char));
+                strcat(binaryPath, "/usr/local/bin/");
+                strncat(binaryPath, arguments.package, 255-strlen("/usr/local/bin/"));
+                unlink(binaryPath);
+                free(binaryPath);
+            }
+            /* Download packages. */
             puts("Downloading packages...");
             download_package(handle, packageName, repository);
 
@@ -167,22 +196,27 @@ config_set:
             gpgme_new(&context);
             char* packageFilename = calloc(512, sizeof(char));
             char* signatureFilename = calloc(517, sizeof(char));
-            strncat(packageFilename, "hello-2.12.1", 504);
+            strcpy(packageFilename, "/tmp/npkg/src/");
+            strncat(packageFilename, packageName, 504);
             strncat(packageFilename, ".tar.zst", 8);
-            strncat(signatureFilename, packageFilename, 512);
+            strncpy(signatureFilename, packageFilename, 512);
             strncat(signatureFilename, ".sig", 5);
-            if (verify_package(context, signatureFilename, packageFilename) == VERIFY_OK) {
-                puts("Extracting packages...");
-                extract_package(packageFilename);
-                char* packagePath = calloc(512, sizeof(char));
-                strncat(packagePath, "./", 3);
-                strncat(packagePath, packageName, 509);
-                chdir(packagePath);
-                system("./npkg-install.sh");
-                free(packagePath);
-            } else {
-                fprintf(stderr, "ERROR: package %s corrupt or tampered with!\n", packageFilename);
+            error = verify_package(context, signatureFilename, packageFilename);
+            if (error == VERIFY_ERR) {
+                fprintf(stderr, "%sERROR%s: package %s corrupt or tampered with!\n", ANSI_FG_RED, ANSI_RESET, packageFilename);
+                goto verify_cleanup;
             }
+
+            puts("Extracting packages...");
+            extract_package(packageFilename);
+            char* packagePath = calloc(512, sizeof(char));
+            strncat(packagePath, "./", 3);
+            strncat(packagePath, packageName, 509);
+            chdir(packagePath);
+            system("./npkg-install.sh");
+            free(packagePath);
+
+verify_cleanup:
             free(packageFilename);
             free(signatureFilename);
             gpgme_release(context);
@@ -196,8 +230,99 @@ config_set:
                 printf("Package `%s` exists in version `%s`.\n", packageName, packageVersion);
             }
         }
+cleanup:
+        curl_easy_cleanup(handle);
+        curl_global_cleanup();
+        if (error) {
+            return EXIT_FAILURE;
+        }
+    } else {
+        /* We're uninstalling a package. */
+        /* Check if we have effective root. */
+        if (geteuid() != 0) {
+            fprintf(stderr, "%sERROR%s: We do not have sufficient permissions to uninstall the package.\nPlease try again as superuser.\n", ANSI_FG_RED, ANSI_RESET);
+            return EXIT_FAILURE;
+        }
+        printf("Are you sure that you want to uninstall %s? [y/N] ", arguments.package);
+        int answer = getchar();
+        if (answer != (int)'y') {
+            printf("Not uninstalling %s.\n", arguments.package);
+            return EXIT_SUCCESS;
+        }
+        /* TODO: Keep track of installed files in install script and 
+            delete those instead of semi-hardcoding the path. */
+        char* binaryPath = calloc(256, sizeof(char));
+        strcat(binaryPath, "/usr/local/bin/");
+        strncat(binaryPath, arguments.package, 255-strlen("/usr/local/bin/"));
+        unlink(binaryPath);
+        free(binaryPath);
+        /* Download package list and find the package name. */
+        curl_global_init(CURL_GLOBAL_ALL);
+        handle = curl_easy_init();
+        curl_easy_setopt(handle, CURLOPT_URL, strncat(url, "/packages.list", 15));
+        curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, writefunction);
+        curl_easy_setopt(handle, CURLOPT_WRITEDATA, &package_list);
+        curl_easy_setopt(handle, CURLOPT_USE_SSL, CURLUSESSL_ALL);
+        curl_easy_perform(handle);
+        fclose(package_list.stream);
+        char* packageName = findPackageInRepository(arguments.package);
+        unlink("packages.list");
+        char* packagePath = calloc(1024, sizeof(char));
+        strcat(packagePath, "/usr/local/");
+        strncat(packagePath, packageName, 255-strlen("/usr/local/"));
+        /* Remove the whole installed tree. This is in another function for readability reasons. */
+        recursivelyRemoveFileTree(packagePath);
+        free(packagePath);
         curl_easy_cleanup(handle);
         curl_global_cleanup();
     }
+    
     return EXIT_SUCCESS;
+}
+
+void recursivelyRemoveFileTree(const char* path) {
+    size_t path_length;
+    char* full_path;
+    DIR* directory;
+    struct stat stat_path, stat_entry;
+    struct dirent* entry;
+
+    stat(path, &stat_path);
+
+    if (S_ISDIR(stat_path.st_mode) == 0) {
+        fprintf(stderr, "%sERROR%s: %s isn't a directory!", ANSI_FG_RED, ANSI_RESET, path);
+        return;
+    }
+
+    directory = opendir(path);
+    path_length = strlen(path);
+
+    while ((entry = readdir(directory)) != NULL) {
+        /* Skip "." and "..", since we'll either delete them anyway, or won't delete them else it'd break the whole system. */
+        if (!strcmp(entry->d_name, ".") || !strcmp(entry->d_name, "..")) {
+            continue;
+        }
+
+        full_path = calloc(path_length + 1 + strlen(entry->d_name) + 1, sizeof(char));
+        strcpy(full_path, path); /* This is safe to do, since full_path is guaranteed to have at least 2 bytes more than path. */
+        strcat(full_path, "/");
+        strcat(full_path, entry->d_name); /* Also safe, since full_path has at least one byte more than entry->d_name. */
+
+        stat(full_path, &stat_entry);
+
+        /* Recursion ftw! */
+        if (S_ISDIR(stat_entry.st_mode) != 0) {
+            recursivelyRemoveFileTree(full_path);
+            free(full_path);
+            continue;
+        }
+
+        /* This is a file. */
+        unlink(full_path);
+        free(full_path);
+    }
+    
+    /* Our work is done; remove the directory! */
+    rmdir(path);
+    closedir(directory);
 }

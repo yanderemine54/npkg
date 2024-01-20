@@ -15,8 +15,8 @@
 # You should have received a copy of the GNU General Public License
 # along with npkg.  If not, see <http://www.gnu.org/licenses/>.
 
-AC_INIT([npkg], [0.2.0], [maddy@maddysworld.de], [npkg-0.2.0], [https://github.com/yanderemine54/npkg])
-AC_PREREQ([2.69])
+AC_INIT([npkg],[0.3.0],[maddy@maddysworld.de],[npkg],[https://github.com/yanderemine54/npkg])
+AC_PREREQ([2.71])
 AM_INIT_AUTOMAKE([foreign])
 AC_USE_SYSTEM_EXTENSIONS
 gl_INIT
@@ -36,6 +36,17 @@ AC_SYS_LARGEFILE
 
 AC_PROG_CC
 gl_EARLY
+
+# Header shenanigans for debug messages.
+AH_TEMPLATE([DEBUG], [Define to enable debug messages.])
+AC_ARG_ENABLE([debug], AS_HELP_STRING([--enable-debug],[enable debug messages (default is NO)]), [
+    case "${enableval}" in
+    yes) npkg_opt_debug=yes ;;
+    no) npkg_opt_debug=no ;;
+    *) npkg_opt_debug=no ;;
+    esac
+], [npkg_opt_debug=no])
+test "$npkg_opt_debug" = "yes" && AC_DEFINE([DEBUG])
 
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_FILES([Makefile src/Makefile lib/Makefile])
