@@ -39,7 +39,7 @@
 #include "colors.h"
 
 /* Argp boilerplate. */
-const char* argp_program_version = "npkg 0.2.0";
+const char* argp_program_version = "npkg 0.3.0";
 const char* argp_program_bug_address = "<maddy@maddysworld.de>";
 static char doc[] = "A source-based package manager written in C.";
 static char args_doc[] = "[PACKAGE-NAME]...";
