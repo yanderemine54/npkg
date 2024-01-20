@@ -16,7 +16,7 @@
 # along with npkg.  If not, see <http://www.gnu.org/licenses/>.
 
 echo "Configuring source..."
-./configure --prefix=/usr/local/npkg-0.2.0
+./configure --prefix=/usr/local/npkg-0.3.0
 echo "Source configured."
 
 echo "Compiling source..."
