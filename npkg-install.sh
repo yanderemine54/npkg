@@ -32,6 +32,6 @@ else
         gpg --keyserver keyserver.ubuntu.com --recv-keys AF3B8064
         ./trust-key.exp AF3B8064
         make install
-        ln -s /usr/local/npkg-0.2.0/bin/npkg /usr/local/bin/npkg
+        ln -s /usr/local/npkg-0.3.0/bin/npkg /usr/local/bin/npkg
         echo "Package installed."
 fi
